@@ -124,6 +124,7 @@ def main():
     ap.add_argument("--no-band", action="store_true")
     ap.add_argument("--no-fac", action="store_true", help="ablation: POI from establishments only")
     ap.add_argument("--no-cbp", action="store_true", help="ablation: POI from facilities only")
+    ap.add_argument("--shift", type=float, default=0.0, help="add a constant to the final score (intercept)")
     ap.add_argument("--draws", type=int, default=400)
     ap.add_argument("--seed", type=int, default=42)
     a = ap.parse_args()
@@ -132,6 +133,7 @@ def main():
     p = simulate(d, a.draws, not a.no_band, np.random.default_rng(a.seed), not a.no_fac, not a.no_cbp)
     s = p.coverage_gap_score
     p["coverage_gap_score"] = a.alpha * s + (1 - a.alpha) * s.groupby(p.region).transform("mean")
+    p["coverage_gap_score"] = (p.coverage_gap_score + a.shift).clip(0, 1)
 
     print(p.groupby("region")[["coverage_gap_score", "transport_gap", "building_gap", "poi_gap", "p_transport_defined"]].mean().round(3))
     print(p.coverage_gap_score.describe().round(3))
