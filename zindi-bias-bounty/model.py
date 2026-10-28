@@ -52,7 +52,7 @@ def gap(over, ref):
         return 1 - np.minimum(1, np.where(ref > 0, over / ref, 1.0))
 
 
-def simulate(d, draws, use_band, rng):
+def simulate(d, draws, use_band, rng, use_fac=True, use_cbp=True):
     n = len(d)
     shape = (draws, n)
 
@@ -84,12 +84,12 @@ def simulate(d, draws, use_band, rng):
         per_type[name] = (g, defined)
         fac_sum += np.where(defined, g, 0)
         fac_cnt += defined
-    fac_def = fac_cnt > 0
+    fac_def = (fac_cnt > 0) & use_fac
     fac = np.where(fac_def, fac_sum / np.maximum(fac_cnt, 1), 0)
 
     # POI, establishments half: county CBP counts allocated by housing units.
     cbp = CBP_PER_HU * d.housing_units.to_numpy() * np.exp(rng.normal(-CBP_SIGMA**2 / 2, CBP_SIGMA, shape))
-    cbp_def = cbp >= 0.5
+    cbp_def = (cbp >= 0.5) & use_cbp
     est = gap(d.poi_n.to_numpy(), cbp)
 
     poi_def = fac_def | cbp_def
@@ -122,12 +122,14 @@ def main():
     ap.add_argument("out_csv")
     ap.add_argument("--alpha", type=float, default=1.0, help="shrink toward the regional mean (1 = none)")
     ap.add_argument("--no-band", action="store_true")
+    ap.add_argument("--no-fac", action="store_true", help="ablation: POI from establishments only")
+    ap.add_argument("--no-cbp", action="store_true", help="ablation: POI from facilities only")
     ap.add_argument("--draws", type=int, default=400)
     ap.add_argument("--seed", type=int, default=42)
     a = ap.parse_args()
 
     d = load(a.feat_dir)
-    p = simulate(d, a.draws, not a.no_band, np.random.default_rng(a.seed))
+    p = simulate(d, a.draws, not a.no_band, np.random.default_rng(a.seed), not a.no_fac, not a.no_cbp)
     s = p.coverage_gap_score
     p["coverage_gap_score"] = a.alpha * s + (1 - a.alpha) * s.groupby(p.region).transform("mean")
 
