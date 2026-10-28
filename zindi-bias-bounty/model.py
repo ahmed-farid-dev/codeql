@@ -113,6 +113,11 @@ def simulate(d, draws, use_band, rng, use_fac=True, use_cbp=True):
         out[f"poi_defined_{name}"] = m.mean(0) >= 0.5
         out[f"poi_gap_{name}"] = np.where(out[f"poi_defined_{name}"], cond_mean(g, m), 0)
     out["p_transport_defined"] = road_def.mean(0)
+    # Each component's expected share of the composite (the four sum to the score).
+    halves = np.maximum(fac_def.astype(int) + cbp_def, 1)
+    for name, part in [("road", np.where(road_def, road, 0)), ("bldg", np.where(bldg_def, bldg, 0)),
+                       ("fac", np.where(fac_def, fac, 0) / halves), ("cbp", np.where(cbp_def, est, 0) / halves)]:
+        out[f"contrib_{name}"] = (part / np.maximum(cnt, 1)).mean(0)
     return pd.DataFrame(out)
 
 
