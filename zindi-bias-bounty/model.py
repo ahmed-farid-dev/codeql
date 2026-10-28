@@ -12,7 +12,7 @@ import argparse
 import numpy as np
 import pandas as pd
 
-REGIONS = ["maricopa-az", "northern-ca", "eastern-ok", "south-central-tx"]
+REGIONS = ["maricopa-az", "northern-ca", "eastern-ok", "south-central-tx", "eastern-wa"]
 
 # Prior per-tract rates for the reference facility layers (USGS National Map structures),
 # roughly national counts / 85k tracts.
@@ -27,6 +27,12 @@ CBP_SIGMA = 0.5           # log-sd of the tract allocation of county CBP counts
 MS_LOG_MU, MS_LOG_SIGMA = -0.10, 0.20   # log(Microsoft count / Overture count)
 TIGER_LOG_SIGMA = 0.15    # log-sd of TIGER highway length around the Overture proxy
 MIN_HWY_M = 50.0
+SUBMISSION_COLUMNS = [
+    "GEOID", "coverage_gap_score", "region",
+    "transport_gap", "transport_defined", "building_gap", "building_defined", "poi_gap", "poi_defined",
+    "poi_gap_fire", "poi_defined_fire", "poi_gap_ems", "poi_defined_ems",
+    "poi_gap_schools", "poi_defined_schools", "poi_gap_cbp", "poi_defined_cbp",
+]
 
 
 def load(feat_dir):
@@ -68,12 +74,15 @@ def simulate(d, draws, use_band, rng):
     w = w / w.mean()
     fac_sum = np.zeros(shape)
     fac_cnt = np.zeros(shape)
-    for col, rate, q in FACILITY.values():
+    per_type = {}
+    for name, (col, rate, q) in FACILITY.items():
         o = d[col].to_numpy().astype(int)
         miss_rate = max(0.05, rate - q * o.mean())
         ref = rng.binomial(np.broadcast_to(o, shape), q) + rng.poisson(miss_rate * w, shape)
         defined = ref > 0
-        fac_sum += np.where(defined, gap(o, ref), 0)
+        g = gap(o, ref)
+        per_type[name] = (g, defined)
+        fac_sum += np.where(defined, g, 0)
         fac_cnt += defined
     fac_def = fac_cnt > 0
     fac = np.where(fac_def, fac_sum / np.maximum(fac_cnt, 1), 0)
@@ -93,15 +102,18 @@ def simulate(d, draws, use_band, rng):
     def cond_mean(x, m):
         return np.where(m.sum(0) > 0, (x * m).sum(0) / np.maximum(m.sum(0), 1), 0)
 
-    return pd.DataFrame({
-        "GEOID": d.GEOID,
-        "region": d.region,
-        "transport_gap": cond_mean(road, road_def),
-        "building_gap": cond_mean(bldg, bldg_def),
-        "poi_gap": cond_mean(poi, poi_def),
-        "coverage_gap_score": score.mean(0),
-        "p_transport_defined": road_def.mean(0),
-    })
+    per_type["schools"] = per_type.pop("school")
+    per_type["cbp"] = (est, cbp_def)
+    out = {"GEOID": d.GEOID, "coverage_gap_score": score.mean(0), "region": d.region}
+    for name, (g, m) in [("transport", (road, road_def)), ("building", (bldg, bldg_def)), ("poi", (poi, poi_def))]:
+        out[f"{name}_defined"] = m.mean(0) >= 0.5
+        out[f"{name}_gap"] = np.where(out[f"{name}_defined"], cond_mean(g, m), 0)
+    for name, (g, m) in per_type.items():
+        # Organiser convention: an undefined component is written as 0 with its flag false.
+        out[f"poi_defined_{name}"] = m.mean(0) >= 0.5
+        out[f"poi_gap_{name}"] = np.where(out[f"poi_defined_{name}"], cond_mean(g, m), 0)
+    out["p_transport_defined"] = road_def.mean(0)
+    return pd.DataFrame(out)
 
 
 def main():
@@ -121,8 +133,7 @@ def main():
 
     print(p.groupby("region")[["coverage_gap_score", "transport_gap", "building_gap", "poi_gap", "p_transport_defined"]].mean().round(3))
     print(p.coverage_gap_score.describe().round(3))
-    cols = ["GEOID", "transport_gap", "building_gap", "poi_gap", "coverage_gap_score"]
-    p[cols].to_csv(a.out_csv, index=False)
+    p[SUBMISSION_COLUMNS].to_csv(a.out_csv, index=False)
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ import sys
 import duckdb
 
 DATA, OUT = sys.argv[1], sys.argv[2]
-REGIONS = ["maricopa-az", "northern-ca", "eastern-ok", "south-central-tx"]
+REGIONS = ["maricopa-az", "northern-ca", "eastern-ok", "south-central-tx", "eastern-wa"]
 NAMED = "('motorway','trunk','primary','secondary')"
 PROJ = "ST_Transform(geometry, 'EPSG:4326', 'EPSG:5070', always_xy := true)"
 

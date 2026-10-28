@@ -1,6 +1,6 @@
 # Bias Bounty: Mapping Equity Challenge (Zindi)
 
-Per-tract Overture coverage-gap estimates for the four scored regions (9,379 tracts).
+Per-tract Overture coverage-gap estimates for the five regions in Zindi's SampleSubmission.csv (9,794 tracts).
 
 No labels are provided and the reference layers (TIGER, Microsoft buildings, HIFLD/USGS
 facilities, CBP) were removed, so the model rebuilds the published scoring formula: Overture
@@ -20,7 +20,7 @@ rates (Maricopa 46% vs ≤45%, N. California 62% vs ≤63%, E. Oklahoma 78% vs �
 ## Reproduce
 
 ```bash
-aws s3 sync s3://us-west-2.opendata.source.coop/humane-intelligence/bias-bounty-mapping-equity-challenge/reference/ DATA/reference/ --no-sign-request --exclude '*roads-unfiltered*' --exclude 'eastern-wa/*'
+aws s3 sync s3://us-west-2.opendata.source.coop/humane-intelligence/bias-bounty-mapping-equity-challenge/reference/ DATA/reference/ --no-sign-request --exclude '*roads-unfiltered*'
 aws s3 sync s3://us-west-2.opendata.source.coop/humane-intelligence/bias-bounty-mapping-equity-challenge/strata/ DATA/strata/ --no-sign-request --exclude '*.csv' --exclude 'national/*'
 python features.py DATA FEAT
 python band_features.py DATA FEAT
