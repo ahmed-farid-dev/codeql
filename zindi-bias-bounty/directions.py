@@ -7,7 +7,7 @@ for K directions solve C w = B with C = E[d d'] (computed here). K is kept small
 ordinary tuning of a handful of coefficients, not label recovery.
 
 Usage:
-  python directions.py FEAT_DIR make   # writes probes/probe_<k>.csv and probes/directions.parquet
+  python directions.py FEAT_DIR make [name ...]   # writes probes/probe_<k>.csv and probes/directions.parquet
   python directions.py FEAT_DIR solve SCORES_JSON OUT_CSV   # {"base": e0, "<name>": e_k, ...}
 """
 import json
@@ -41,21 +41,39 @@ def base_and_directions(feat_dir):
     dirs = (dirs / dirs.std()).clip(-CLIP, CLIP)
     for reg in ["south-central-tx", "maricopa-az", "eastern-ok"]:
         dirs[f"region_{reg}"] = (d.region == reg).astype(float)
-    return b, dirs
+
+    # Second batch of directions (appended, so earlier probes keep their meaning).
+    st = d[["GEOID"]].merge(pd.read_parquet(f"{feat_dir}/strata.parquet"), on="GEOID", how="left")
+    extra = pd.DataFrame({
+        "osm_frac": d.bldg_osm / np.maximum(d.bldg_n, 1),
+        "p_road_defined": full.p_transport_defined,
+        "hwy_band_share": d.hwy_band_len / (d.hwy_len + d.hwy_band_len + 1),
+        "fire_zero": (d.poi_fire == 0).astype(float),
+        "pct_urban": st.pct_urban,
+        "svi": st.svi_overall,
+        "tribal_pct": st.tribal_pct,
+        "log_pop_density": np.log1p(st.ruca_pop_density),
+    })
+    extra = extra.fillna(extra.groupby(d.region).transform("mean")).fillna(0)
+    extra = extra.sub(extra.groupby(d.region).transform("mean"))
+    return b, pd.concat([dirs, (extra / extra.std()).clip(-CLIP, CLIP)], axis=1)
 
 
 def main():
     feat_dir, mode = sys.argv[1], sys.argv[2]
     base, dirs = base_and_directions(feat_dir)
     if mode == "make":
+        only = sys.argv[3:]   # optional: names of directions to write
         assert (base.coverage_gap_score - STEP * CLIP > 0).all(), "probe would clip at 0"
         dirs.assign(GEOID=base.GEOID).to_parquet("probes/directions.parquet", index=False)
         base[SUBMISSION_COLUMNS].to_csv("probes/probe_00_base.csv", index=False)
         for i, k in enumerate(dirs.columns, 1):
+            if only and k not in only:
+                continue
             p = base.copy()
             p["coverage_gap_score"] = base.coverage_gap_score + STEP * dirs[k]
             p[SUBMISSION_COLUMNS].to_csv(f"probes/probe_{i:02d}_{k}.csv", index=False)
-        print("\n".join(f"probe_{i:02d}_{k}" for i, k in enumerate(dirs.columns, 1)))
+        print("\n".join(f"probe_{i:02d}_{k}" for i, k in enumerate(dirs.columns, 1) if not only or k in only))
         return
 
     scores = json.load(open(sys.argv[3]))
