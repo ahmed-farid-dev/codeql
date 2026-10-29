@@ -60,6 +60,7 @@ def main():
 
     scores = json.load(open(sys.argv[3]))
     e0 = scores["base"] ** 2
+    dirs = dirs[[k for k in dirs.columns if k in scores]]   # only directions that were probed
     X = dirs.assign(const=1.0).astype(float)
     C = X.T @ X / len(X)
     B = pd.Series(0.0, index=X.columns)   # const: the base level was already fitted (B = 0)
