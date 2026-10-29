@@ -1,0 +1,9 @@
+lsnrctl status
+sqlplus sys/your_password@pdbCS AS SYSDBA
+type %ORACLE_HOME%\network\admin\tnsnames.ora
+REM add the alias below at the end of tnsnames.ora, save, then retry:
+REM PDBCS =
+REM   (DESCRIPTION = (ADDRESS = (PROTOCOL = TCP)(HOST = localhost)(PORT = 1521))
+REM     (CONNECT_DATA = (SERVER = DEDICATED)(SERVICE_NAME = pdbcs)))
+sqlplus sys/your_password@pdbCS AS SYSDBA
+SHOW CON_NAME
